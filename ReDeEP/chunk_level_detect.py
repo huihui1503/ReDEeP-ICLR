@@ -27,20 +27,20 @@ args = parser.parse_args()
 bge_model = SentenceTransformer('/home/zhongxiang_sun/code/LLMs/bge-base-en-v1.5/').to("cuda:0")
 if args.dataset == "ragtruth":
     if args.model_name == "llama3-8b":
-        response_path = "../dataset/response_span_with_llama3_8b.jsonl"
+        response_path = "../ReDEeP-ICLR/dataset/response_span_with_llama3_8b.jsonl"
     else:
-        response_path = "../dataset/response_spans.jsonl"
+        response_path = "../ReDEeP-ICLR/dataset/response_spans.jsonl"
 elif args.dataset == "dolly":
-    response_path = "../dataset/response_dolly_spans.jsonl"
+    response_path = "../ReDEeP-ICLR/dataset/response_dolly_spans.jsonl"
 response = []
 with open(response_path, 'r') as f:
     for line in f:
         data = json.loads(line)
         response.append(data)
 if args.dataset == "ragtruth":
-    source_info_path = "../dataset/source_info_spans.jsonl"
+    source_info_path = "../ReDEeP-ICLR/dataset/source_info_spans.jsonl"
 elif args.dataset == "dolly":
-    source_info_path = "../dataset/source_info_dolly_spans.jsonl"
+    source_info_path = "../ReDEeP-ICLR/dataset/source_info_dolly_spans.jsonl"
 source_info_dict = {}
 
 with open(source_info_path, 'r') as f:
@@ -50,11 +50,11 @@ with open(source_info_path, 'r') as f:
 
 
 if args.model_name == "llama2-7b":
-    model_name = "llama2/llama-2-7b-chat-hf"
+    model_name = "meta-llama/Llama-2-7b-chat-hf"
 elif args.model_name == "llama2-13b":
-    model_name = "llama2/llama-2-13b-chat-hf"
+    model_name = "meta-llama/Llama-2-13b-chat-hf"
 elif args.model_name == "llama3-8b":
-    model_name = "llama3/Meta-Llama-3-8B-Instruct/"
+    model_name = "meta-llama/Llama-3.1-8B-Instruct"
 else:
     print("name error")
     exit(-1)
@@ -68,17 +68,17 @@ tokenizer = AutoTokenizer.from_pretrained(f"/home/sunhao_dai/PLMs/{model_name}")
 device = "cuda"
 
 if args.model_name == "llama2-13b":
-    tokenizer_for_temp = AutoTokenizer.from_pretrained("/home/sunhao_dai/PLMs/llama2/llama-2-7b-chat-hf")
+    tokenizer_for_temp = AutoTokenizer.from_pretrained("/home/sunhao_dai/PLMs/meta-llama/Llama-2-7b-chat-hf")
 else:
     tokenizer_for_temp = tokenizer
 
 
 if args.model_name == "llama2-7b":
-    topk_head_path = "./log/test_llama2_7B/topk_heads.json"
+    topk_head_path = "./ReDeEP/log/test_llama2_7B/topk_heads.json"
 elif args.model_name == "llama2-13b":
-    topk_head_path = "./log/test_llama2_13B/topk_heads.json"
+    topk_head_path = "./ReDeEP/log/test_llama2_13B/topk_heads.json"
 elif args.model_name == "llama3-8b":
-    topk_head_path = "./log/test_llama3_8B/topk_heads.json" #"./log/test_llama3_8B/topk_heads.json"
+    topk_head_path = "./ReDeEP/log/test_llama3_8B/topk_heads.json" #"./ReDeEP/log/test_llama3_8B/topk_heads.json"
 else:
     print("model name error")
     exit(-1)
@@ -326,19 +326,19 @@ for i in tqdm(range(len(response))):
 
 if args.model_name == "llama2-7b":
     if args.dataset == "ragtruth":
-        save_path = "./log/test_llama2_7B/llama2_7B_response_chunk.json"
+        save_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_chunk.json"
     elif args.dataset == "dolly":
-        save_path = "./log/test_llama2_7B/llama2_7B_response_chunk_dolly.json"
+        save_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_chunk_dolly.json"
 elif args.model_name == "llama2-13b":
     if args.dataset == "ragtruth":
-        save_path = "./log/test_llama2_13B/llama2_13B_response_chunk.json"
+        save_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_chunk.json"
     elif args.dataset == "dolly":
-        save_path = "./log/test_llama2_13B/llama2_13B_response_chunk_dolly.json"
+        save_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_chunk_dolly.json"
 elif args.model_name == "llama3-8b":
     if args.dataset == "ragtruth":
-        save_path = "./log/test_llama3_8B/llama3_8B_response_chunk.json"
+        save_path = "./ReDeEP/log/test_llama3_8B/llama3_8B_response_chunk.json"
     elif args.dataset == "dolly":
-        save_path = "./log/test_llama3_8B/llama3_8B_response_chunk_dolly.json"
+        save_path = "./ReDeEP/log/test_llama3_8B/llama3_8B_response_chunk_dolly.json"
 else:
     print("model name error")
     exit(-1)

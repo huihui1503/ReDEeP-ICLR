@@ -26,7 +26,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 
-source_info_path = "../dataset/source_info.jsonl"
+source_info_path = "../ReDEeP-ICLR/dataset/source_info.jsonl"
 source_info_dict = {}
 
 with open(source_info_path, 'r') as f:
@@ -200,21 +200,21 @@ if __name__ == "__main__":
 
     if args.model_name == "llama2-7b":
         if args.dataset == "ragtruth":
-            data_path = "./log/test_llama2_7B/llama2_7B_response_chunk.json"
+            data_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_chunk.json"
         elif args.dataset == "ragtruth":
-            data_path = "./log/test_llama2_7B/llama2_7B_response_chunk_dolly.json"
+            data_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_chunk_dolly.json"
         number = 32
     elif args.model_name == "llama2-13b":
         if args.dataset == "ragtruth":
-            data_path = "./log/test_llama2_13B/llama2_13B_response_chunk.json"
+            data_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_chunk.json"
         elif args.dataset == "ragtruth":
-            data_path = "./log/test_llama2_13B/llama2_13B_response_chunk_dolly.json"
+            data_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_chunk_dolly.json"
         number = 32
     elif args.model_name == "llama3-8b":
         if args.dataset == "ragtruth":
-            data_path = "./log/test_llama3_8B/llama3_8B_response_chunk.json"
+            data_path = "./ReDeEP/log/test_llama3_8B/llama3_8B_response_chunk.json"
         elif args.dataset == "dolly":
-            data_path = "./log/test_llama3_8B/llama3_8B_response_chunk_dolly.json"
+            data_path = "./ReDeEP/log/test_llama3_8B/llama3_8B_response_chunk_dolly.json"
         number = 32
     else:
         print("model name error")
@@ -247,11 +247,11 @@ if __name__ == "__main__":
     
     auc_difference_normalized, person_difference_normalized = calculate_auc_pcc_32_32(df, i, j, k, auc_external_similarity, auc_parameter_knowledge_difference, m)
     if args.model_name == "llama2-7b":
-        save_path = "./log/test_llama2_7B/ReDeEP(chunk).json"
+        save_path = "./ReDeEP/log/test_llama2_7B/ReDeEP(chunk).json"
     elif args.model_name == "llama2-13b":
-        save_path = "./log/test_llama2_13B/ReDeEP(chunk).json"
+        save_path = "./ReDeEP/log/test_llama2_13B/ReDeEP(chunk).json"
     elif args.model_name == "llama3-8b":
-        save_path = "./log/test_llama3_8B/ReDeEP(chunk).json"
+        save_path = "./ReDeEP/log/test_llama3_8B/ReDeEP(chunk).json"
     else:
         print("model name error")
         exit(-1)

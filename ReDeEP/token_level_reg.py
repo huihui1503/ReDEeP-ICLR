@@ -184,11 +184,11 @@ def calculate_auc_pcc_32_32(df, top_n, top_k, alpha, auc_external_similarity, au
 
 if __name__ == "__main__":
     if args.model_name == "llama2-7b":
-        topk_head_path = "./log/test_llama2_7B/topk_heads.json"
+        topk_head_path = "./ReDeEP/log/test_llama2_7B/topk_heads.json"
     elif args.model_name == "llama2-13b":
-        topk_head_path = "./log/test_llama2_13B/topk_heads.json"
+        topk_head_path = "./ReDeEP/log/test_llama2_13B/topk_heads.json"
     elif args.model_name == "llama3-8b":
-        topk_head_path =  "./log/test_llama3_8B/topk_heads.json" 
+        topk_head_path =  "./ReDeEP/log/test_llama3_8B/topk_heads.json" 
     else:
         print("model name error")
         exit(-1)
@@ -200,21 +200,21 @@ if __name__ == "__main__":
 
     if args.model_name == "llama2-7b":
         if args.dataset == "ragtruth":
-            data_path = "./log/test_llama2_7B/llama2_7B_response_v1.json"
+            data_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_v1.json"
         elif args.dataset == "dolly":
-            data_path = "./log/test_llama2_7B/llama2_7B_response_v1_dolly.json"
+            data_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_v1_dolly.json"
         number = 32
     elif args.model_name == "llama2-13b":
         if args.dataset == "ragtruth":
-            data_path = "./log/test_llama2_13B/llama2_13B_response_v1.json"
+            data_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_v1.json"
         elif args.dataset == "dolly":
-            data_path = "./log/test_llama2_13B/llama2_13B_response_v1_dolly.json"
+            data_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_v1_dolly.json"
         number = 32
     elif args.model_name == "llama3-8b":
         if args.dataset == "ragtruth":
-            data_path = "./log/test_llama3_8B/llama3_8B_response_v1.json"
+            data_path = "./ReDeEP/log/test_llama3_8B/llama3_8B_response_v1.json"
         elif args.dataset == "dolly":
-            data_path = "./log/test_llama2_13B/llama3_8B_response_v1_dolly.json"
+            data_path = "./ReDeEP/log/test_llama2_13B/llama3_8B_response_v1_dolly.json"
         number = 32
     else:
         print("model name error")
@@ -245,11 +245,11 @@ if __name__ == "__main__":
         exit(-1)
     auc_difference_normalized, person_difference_normalized = calculate_auc_pcc_32_32(df, i, j, k, auc_external_similarity, auc_parameter_knowledge_difference, m)
     if args.model_name == "llama2-7b":
-        save_path = "./log/test_llama2_7B/ReDeEP(token).json"
+        save_path = "./ReDeEP/log/test_llama2_7B/ReDeEP(token).json"
     elif args.model_name == "llama2-13b":
-        save_path = "./log/test_llama2_13B/ReDeEP(token).json"
+        save_path = "./ReDeEP/log/test_llama2_13B/ReDeEP(token).json"
     elif args.model_name == "llama3-8b":
-        save_path = "./log/test_llama3_8B/ReDeEP(token).json"
+        save_path = "./ReDeEP/log/test_llama3_8B/ReDeEP(token).json"
     else:
         print("model name error")
         exit(-1)

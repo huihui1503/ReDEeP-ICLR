@@ -1,0 +1,60 @@
+1. Create base env 
+conda create -n myenv python=3.9.18 cudatoolkit=11.7.0 cudnn=8.9.2.26 -c conda-forge -c nvidia
+conda activate myenv
+
+2. Install dependency 
+
+pip install \
+  accelerate==0.23.0 \
+  datasets==2.14.5 \
+  deepspeed==0.12.2 \
+  httpx==0.25.0 \
+  huggingface-hub==0.24.0 \
+  ipython==8.16.1 \
+  jieba==0.42.1 \
+  jinja2==3.1.2 \
+  langchain==0.2.11 \
+  langchain-community==0.2.10 \
+  langchain-core==0.2.23 \
+  langchain-experimental==0.0.63 \
+  langchain-huggingface==0.0.3 \
+  langchain-text-splitters==0.2.2 \
+  langsmith==0.1.93 \
+  matplotlib==3.8.0 \
+  networkx==3.1 \
+  ninja==1.11.1 \
+  nltk==3.8.1 \
+  numpy==1.26.0 \
+  packaging==24.1 \
+  pandas==2.1.1 \
+  scikit-learn==1.3.1 \
+  scipy==1.11.2 \
+  tokenizers==0.19.1 \
+  torch==2.0.1 \
+  tqdm==4.66.1 \
+  trl==0.7.1
+
+**Notes:**
+- Uncompatible version: tokenizers and  langchain-huggingface => Increase from tokenizers==0.19.0 to tokenizers==0.19.1
+- Fail to run with flash-attn==2.3.0
+
+3. Install and build flash-attn==2.3.0
+
+pip install flash-attn==2.3.0
+
+pip install flash-attn==2.3.0 --no-build-isolation
+
+Same error:
+        File "/tmp/pip-install-g16e1fsd/flash-attn_7674afeb5db54ed19ab51f22222aeb37/setup.py", line 136, in <module>
+          CUDAExtension(
+        File "/home/huy/miniconda3/env s/myenv/lib/python3.9/site-packages/torch/utils/cpp_extension.py", line 1048, in CUDAExtension
+          library_dirs += library_paths(cuda=True)
+        File "/home/huy/miniconda3/envs/myenv/lib/python3.9/site-packages/torch/utils/cpp_extension.py", line 1179, in library_paths
+          if (not os.path.exists(_join_cuda_home(lib_dir)) and
+        File "/home/huy/miniconda3/envs/myenv/lib/python3.9/site-packages/torch/utils/cpp_extension.py", line 2223, in _join_cuda_home
+          raise EnvironmentError('CUDA_HOME environment variable is not set. '
+      OSError: CUDA_HOME environment variable is not set. Please set it to your CUDA install root.
+      
+      
+      torch.__version__  = 2.0.1+cu117
+pip install https://github.com/Dao-AILab/flash-attention/releases/download/v2.3.0/flash_attn-2.3.0+cu117torch2.0cxx11abiFALSE-cp39-cp39-linux_x86_64.whl

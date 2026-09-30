@@ -20,11 +20,11 @@ parser.add_argument(
 args = parser.parse_args()
 if args.dataset == "ragtruth":
     if args.model_name == "llama3-8b":
-        response_path = "../dataset/response_with_llama3_8b.jsonl"
+        response_path = "../ReDEeP-ICLR/dataset/response_with_llama3_8b.jsonl"
     else:
-        response_path = "../dataset/response.jsonl"
+        response_path = "../ReDEeP-ICLR/dataset/response.jsonl"
 elif args.dataset == "dolly":
-    response_path = "../dataset/response_dolly.jsonl"
+    response_path = "../ReDEeP-ICLR/dataset/response_dolly.jsonl"
 
 response = []
 with open(response_path, 'r') as f:
@@ -33,11 +33,11 @@ with open(response_path, 'r') as f:
         response.append(data)
 if args.dataset == "ragtruth":
     if args.model_name == "llama3-8b":
-        source_info_path = "../dataset/source_info.jsonl"
+        source_info_path = "../ReDEeP-ICLR/dataset/source_info.jsonl"
     else:
-        source_info_path = "../dataset/source_info.jsonl"
+        source_info_path = "../ReDEeP-ICLR/dataset/source_info.jsonl"
 elif args.dataset == "dolly":
-    source_info_path = "../dataset/source_info_dolly.jsonl"
+    source_info_path = "../ReDEeP-ICLR/dataset/source_info_dolly.jsonl"
 source_info_dict = {}
 
 with open(source_info_path, 'r') as f:
@@ -48,33 +48,34 @@ with open(source_info_path, 'r') as f:
 
 
 if args.model_name == "llama2-7b":
-    model_name = "llama2/llama-2-7b-chat-hf"
+    model_name = "meta-llama/Llama-2-7b-chat-hf"
 elif args.model_name == "llama2-13b":
-    model_name = "llama2/llama-2-13b-chat-hf"
+    model_name = "meta-llama/Llama-2-13b-chat-hf"
 elif args.model_name == "llama3-8b":
-    model_name = "llama3/Meta-Llama-3-8B-Instruct/"
+    model_name = "meta-llama/Llama-3.1-8B-Instruct"
 
 
 model = AutoModelForCausalLM.from_pretrained(
-    f"/home/sunhao_dai/PLMs/{model_name}",
+    f"{model_name}",
     device_map="auto",
-    torch_dtype=torch.float16
+    torch_dtype=torch.float16,
+    attn_implementation="eager",
 )
-tokenizer = AutoTokenizer.from_pretrained(f"/home/sunhao_dai/PLMs/{model_name}")
+tokenizer = AutoTokenizer.from_pretrained(f"{model_name}")
 device = "cuda"
 
 if args.model_name == "llama2-13b":
-    tokenizer_for_temp = AutoTokenizer.from_pretrained("/home/sunhao_dai/PLMs/llama2/llama-2-7b-chat-hf")
+    tokenizer_for_temp = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
 else:
     tokenizer_for_temp = tokenizer
 
 
 if args.model_name == "llama2-7b":
-    topk_head_path = "./log/test_llama2_7B/topk_heads.json"
+    topk_head_path = "./ReDeEP/log/test_llama2_7B/topk_heads.json"
 elif args.model_name == "llama2-13b":
-    topk_head_path = "./log/test_llama2_13B/topk_heads.json"
+    topk_head_path = "./ReDeEP/log/test_llama2_13B/topk_heads.json"
 elif args.model_name == "llama3-8b":
-    topk_head_path = "./log/test_llama3_8B/topk_heads.json"
+    topk_head_path = "./ReDeEP/log/test_llama3_8B/topk_heads.json"
 else:
     print("model name error")
     exit(-1)
@@ -190,6 +191,7 @@ for i in tqdm(range(len(response))):
             print("model name error")
 
         with torch.no_grad():
+            input_ids = input_ids.to(model.device)
             logits_dict, outputs = model(
                     input_ids=input_ids,
                     return_dict=True,
@@ -286,19 +288,19 @@ for i in tqdm(range(len(response))):
 
 if args.model_name == "llama2-7b":
     if args.dataset == "ragtruth":
-        save_path = "./log/test_llama2_7B/llama2_7B_response_v1.json"
+        save_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_v1.json"
     elif args.dataset == "dolly":
-        save_path = "./log/test_llama2_7B/llama2_7B_response_v1_dolly.json"
+        save_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_v1_dolly.json"
 elif args.model_name == "llama2-13b":
     if args.dataset == "ragtruth":
-        save_path = "./log/test_llama2_13B/llama2_13B_response_v1.json"
+        save_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_v1.json"
     elif args.dataset == "dolly":
-        save_path = "./log/test_llama2_13B/llama2_13B_response_v1_dolly.json"
+        save_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_v1_dolly.json"
 elif args.model_name == "llama3-8b":
     if args.dataset == "ragtruth":
-        save_path = "./log/test_llama3_8B/llama3_8B_response_v1.json"
+        save_path = "./ReDeEP/log/test_llama3_8B/llama3_8B_response_v1.json"
     elif args.dataset == "dolly":
-        save_path = "./log/test_llama3_8B/llama3_8B_response_v1_dolly.json"
+        save_path = "./ReDeEP/log/test_llama3_8B/llama3_8B_response_v1_dolly.json"
 else:
     print("model name error")
     exit(-1)

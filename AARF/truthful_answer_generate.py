@@ -34,7 +34,7 @@ Respond in the following format:
 
 
 
-source_info_path = "../dataset/source_info_dolly.jsonl"
+source_info_path = "../ReDEeP-ICLR/dataset/source_info_dolly.jsonl"
 source_info_dict = {}
 
 with open(source_info_path, 'r') as f:
@@ -44,7 +44,7 @@ with open(source_info_path, 'r') as f:
 
 source_id_list = []
 
-response_path = "../dataset/response_dolly.jsonl"
+response_path = "../ReDEeP-ICLR/dataset/response_dolly.jsonl"
 
 with open(response_path, 'r') as f:
     for line in f:
@@ -91,24 +91,24 @@ else:
 
 
 if args.model_name == "llama2-7b":
-    model_name = "llama2/llama-2-7b-chat-hf"
+    model_name = "meta-llama/Llama-2-7b-chat-hf"
 elif args.model_name == "llama2-13b":
-    model_name = "llama2/llama-2-13b-chat-hf"
+    model_name = "meta-llama/Llama-2-13b-chat-hf"
 elif args.model_name == "llama3-8b":
-    model_name = "llama3/Meta-Llama-3-8B-Instruct/"
+    model_name = "meta-llama/Llama-3.1-8B-Instruct"
 else:
     print("name error")
     exit(-1)
 
-tokenizer = AutoTokenizer.from_pretrained(f"/home/sunhao_dai/PLMs/{model_name}")
+tokenizer = AutoTokenizer.from_pretrained(f"{model_name}")
 if args.model_name == "llama2-13b":
-    tokenizer_for_temp = AutoTokenizer.from_pretrained("/home/sunhao_dai/PLMs/llama2/llama-2-7b-chat-hf")
+    tokenizer_for_temp = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
 else:
     tokenizer_for_temp = tokenizer
 
 if args.AARF:
     model = AutoModelForCausalLM.from_pretrained(
-        f"/home/sunhao_dai/PLMs/{model_name}",
+        f"{model_name}",
         torch_dtype=torch.float16,
         device_map="auto",
         select_layers=select_layers,
@@ -116,16 +116,18 @@ if args.AARF:
         layers_max_min=layers_max_min,
         head_max_min=head_max_min,
         weight=weight,
-        final_max_min=final_max_min
+        final_max_min=final_max_min,
+        attn_implementation="eager",
     )
     model.add_attention_weight = 1.2
     model.reduce_ffn_weight = 0.8
     model.threshold = 0.6
 else:
     model = AutoModelForCausalLM.from_pretrained(
-    f"/home/sunhao_dai/PLMs/{model_name}",
+    f"{model_name}",
     torch_dtype=torch.float16,
-    device_map="auto"
+    device_map="auto",
+    attn_implementation="eager",
     )
     
 
