@@ -1,3 +1,11 @@
 transformers/
 dataset/
 .log/
+
+/log/
+# VS Code settings
+.vscode/
+
+# Log files
+ReDeEP/log/
+ReDeEP/log/

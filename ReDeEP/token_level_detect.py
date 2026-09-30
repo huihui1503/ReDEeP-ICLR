@@ -122,6 +122,7 @@ def is_hallucination_token(token_id, hallucination_spans):
         if token_id >= span[0] and token_id <= span[1]:
             return True
     return False
+
 def calculate_hallucination_spans(response, text, response_rag, tokenizer, prefix_len):
     hallucination_span = []
     if "dolly" in source_info_path:

@@ -8,7 +8,7 @@ from sklearn.metrics import roc_auc_score
 from scipy.stats import pearsonr
 from sklearn.preprocessing import MinMaxScaler
 import pdb
-from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
+from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, balanced_accuracy_score
 from tqdm import tqdm
 import argparse
 parser = argparse.ArgumentParser(description='Script for processing data and models.')
@@ -45,7 +45,12 @@ def construct_dataframe(file_path, number):
             for k in range(number):
                 data_dict[f"external_similarity_{k}"].append(resp["external_similarity"][j][k])
                 data_dict[f"parameter_knowledge_difference_{k}"].append(resp["parameter_knowledge_difference"][j][k])
-            data_dict["hallucination_label"].append(resp["hallucination_label"][j])
+
+            label_list = resp.get("label")
+            if label_list is not None:
+                data_dict["hallucination_label"].append(1 if len(label_list) > 0 else 0)
+            else:
+                data_dict["hallucination_label"].append(resp["hallucination_label"][j])
 
     df = pd.DataFrame(data_dict)
 
@@ -174,12 +179,14 @@ def calculate_auc_pcc_32_32(df, top_n, top_k, alpha, auc_external_similarity, au
     # Calculate AUC for the grouped means
     auc_difference_normalized = roc_auc_score(grouped_df['hallucination_label'], grouped_df['difference_normalized_mean_norm'])
     person_difference_normalized, _ = pearsonr(grouped_df['hallucination_label'], grouped_df['difference_normalized_mean_norm'])
+    preds = (grouped_df['difference_normalized_mean_norm'] > 0.5).astype(int)
+    balanced_acc = balanced_accuracy_score(grouped_df['hallucination_label'], preds)
+    macro_f1 = f1_score(grouped_df['hallucination_label'], preds, average="macro")
 
 
     results.update({"Grouped means AUC": auc_difference_normalized})
     results.update({"Grouped means Pearson Correlation": person_difference_normalized})
-    return auc_difference_normalized, person_difference_normalized
-
+    return auc_difference_normalized, person_difference_normalized, balanced_acc, macro_f1
 
 
 if __name__ == "__main__":
@@ -220,7 +227,7 @@ if __name__ == "__main__":
         print("model name error")
         exit(-1)
     df = construct_dataframe(data_path, number)
-    auc_external_similarity, auc_parameter_knowledge_difference = calculate_auc_pcc(df.iloc[:, :int(df.shape[1] * 0.5)], number)
+    auc_external_similarity, auc_parameter_knowledge_difference = calculate_auc_pcc(df, number)
     run_all = False
 
     if args.model_name == "llama2-7b":
@@ -243,7 +250,7 @@ if __name__ == "__main__":
     else:
         print("model name error")
         exit(-1)
-    auc_difference_normalized, person_difference_normalized = calculate_auc_pcc_32_32(df, i, j, k, auc_external_similarity, auc_parameter_knowledge_difference, m)
+    auc_difference_normalized, person_difference_normalized, balanced_acc, macro_f1 = calculate_auc_pcc_32_32(df, i, j, k, auc_external_similarity, auc_parameter_knowledge_difference, m)
     if args.model_name == "llama2-7b":
         save_path = "./ReDeEP/log/test_llama2_7B/ReDeEP(token).json"
     elif args.model_name == "llama2-13b":
@@ -253,7 +260,13 @@ if __name__ == "__main__":
     else:
         print("model name error")
         exit(-1)
-    result_dict = {"auc":auc_difference_normalized, "pcc": person_difference_normalized}
+    result_dict = {
+        "auc":auc_difference_normalized,
+        "pcc": person_difference_normalized,
+        "acc": balanced_acc,
+        "f1": macro_f1,
+        }
+    
     print(result_dict)
     with open(save_path, 'w') as f:
         json.dump(result_dict, f, ensure_ascii=False)
