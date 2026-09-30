@@ -52,7 +52,7 @@ if args.model_name == "llama2-7b":
 elif args.model_name == "llama2-13b":
     model_name = "meta-llama/Llama-2-13b-chat-hf"
 elif args.model_name == "llama3-8b":
-    model_name = "meta-llama/Llama-3.1-8B-Instruct"
+    model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
 
 
 model = AutoModelForCausalLM.from_pretrained(
