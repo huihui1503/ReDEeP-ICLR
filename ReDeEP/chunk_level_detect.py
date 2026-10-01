@@ -24,7 +24,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 
-bge_model = SentenceTransformer('/home/zhongxiang_sun/code/LLMs/bge-base-en-v1.5/').to("cuda:0")
+bge_model = SentenceTransformer('BAAI/bge-base-en-v1.5').to("cuda:0")
 if args.dataset == "ragtruth":
     if args.model_name == "llama3-8b":
         response_path = "../ReDEeP-ICLR/dataset/response_span_with_llama3_8b.jsonl"
@@ -60,15 +60,16 @@ else:
     exit(-1)
 
 model = AutoModelForCausalLM.from_pretrained(
-    f"/home/sunhao_dai/PLMs/{model_name}",
+    f"{model_name}",
     device_map="auto",
-    torch_dtype=torch.float16
+    torch_dtype=torch.float16,
+    attn_implementation="eager",
 )
-tokenizer = AutoTokenizer.from_pretrained(f"/home/sunhao_dai/PLMs/{model_name}")
+tokenizer = AutoTokenizer.from_pretrained(f"{model_name}")
 device = "cuda"
 
 if args.model_name == "llama2-13b":
-    tokenizer_for_temp = AutoTokenizer.from_pretrained("/home/sunhao_dai/PLMs/meta-llama/Llama-2-7b-chat-hf")
+    tokenizer_for_temp = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
 else:
     tokenizer_for_temp = tokenizer
 
@@ -233,7 +234,7 @@ else:
 
 
 for i in tqdm(range(len(response))):
-    if response[i]['model'] == data_type and response[i]["split"] == "test":
+    if response[i]['model'] == data_type:
         response_rag = response[i]['response']
         source_id = response[i]['source_id']
         temperature = response[i]['temperature']
@@ -271,6 +272,7 @@ for i in tqdm(range(len(response))):
 
         start_p, end_p = None, None
         with torch.no_grad():
+            input_ids = input_ids.to(model.device)
             logits_dict, outputs = model(
                     input_ids=input_ids, 
                     return_dict=True,

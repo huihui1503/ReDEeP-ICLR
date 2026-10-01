@@ -26,12 +26,15 @@ if args.dataset == "ragtruth":
         response_path = "../ReDEeP-ICLR/dataset/response.jsonl"
 elif args.dataset == "dolly":
     response_path = "../ReDEeP-ICLR/dataset/response_dolly.jsonl"
+elif args.dataset == "hallurag":
+    response_path = "../ReDEeP-ICLR/dataset/hallurag/hallu_rag_data.jsonl"
 
 response = []
 with open(response_path, 'r') as f:
     for line in f:
         data = json.loads(line)
         response.append(data)
+
 if args.dataset == "ragtruth":
     if args.model_name == "llama3-8b":
         source_info_path = "../ReDEeP-ICLR/dataset/source_info.jsonl"
@@ -39,12 +42,13 @@ if args.dataset == "ragtruth":
         source_info_path = "../ReDEeP-ICLR/dataset/source_info.jsonl"
 elif args.dataset == "dolly":
     source_info_path = "../ReDEeP-ICLR/dataset/source_info_dolly.jsonl"
-source_info_dict = {}
 
-with open(source_info_path, 'r') as f:
-    for line in f:
-        data = json.loads(line)
-        source_info_dict[data['source_id']] = data
+source_info_dict = {}
+if args.dataset != "hallurag":
+    with open(source_info_path, 'r') as f:
+        for line in f:
+            data = json.loads(line)
+            source_info_dict[data['source_id']] = data
 
 
 
@@ -162,9 +166,13 @@ else:
 for i in tqdm(range(len(response))):
     if response[i]['model'] == data_type:
         response_rag = response[i]['response']
-        source_id = response[i]['source_id']
-        temperature = response[i]['temperature']
-        prompt =  source_info_dict[source_id]['prompt']
+        if args.dataset != "hallurag":
+            source_id = response[i]['source_id']
+            temperature = response[i]['temperature']
+            prompt =  source_info_dict[source_id]['prompt']
+        else:
+            temperature = 0.0
+            prompt =  response[i]['prompt']
         messages = [
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": prompt[:12000]}
@@ -307,11 +315,15 @@ if args.model_name == "llama2-7b":
         save_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_v1.json"
     elif args.dataset == "dolly":
         save_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_v1_dolly.json"
+    elif args.dataset == "hallurag":
+        save_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_v1_hallurag.json"
 elif args.model_name == "llama2-13b":
     if args.dataset == "ragtruth":
         save_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_v1.json"
     elif args.dataset == "dolly":
         save_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_v1_dolly.json"
+    elif args.dataset == "hallurag":
+        save_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_v1_hallurag.json"
 elif args.model_name == "llama3-8b":
     if args.dataset == "ragtruth":
         save_path = "./ReDeEP/log/test_llama3_8B/llama3_8B_response_v1.json"

@@ -19,4 +19,6 @@ __pycache__/
 __pycache__/
 *.pyc
 *.pyo
-*.pyd
+*.pyd__pycache__/
+__pycache__/
+*.pyc
