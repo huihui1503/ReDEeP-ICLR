@@ -8,6 +8,7 @@ from tqdm import tqdm
 import pdb
 import pickle
 import argparse
+import gc
 
 parser = argparse.ArgumentParser(description='Script for processing data and models.')
 parser.add_argument('--model_name', type=str, required=True, help='llama2-7b or llama2-13b or llama3-8b')
@@ -139,6 +140,14 @@ def calculate_hallucination_spans(response, text, response_rag, tokenizer, prefi
         hallucination_span.append([start_id, end_id])
     return hallucination_span
 
+
+def run_forward(model, input_ids, start, number):
+    return model(
+        input_ids=input_ids, return_dict=True,
+        output_attentions=True, output_hidden_states=True,
+        knowledge_layers=list(range(start, number))
+    )
+
 select_response = []
 if args.model_name == "llama2-7b":
     data_type = "llama-2-7b-chat"
@@ -151,7 +160,7 @@ else:
     exit(-1) 
 
 for i in tqdm(range(len(response))):
-    if response[i]['model'] == data_type and response[i]["split"] == "test":
+    if response[i]['model'] == data_type:
         response_rag = response[i]['response']
         source_id = response[i]['source_id']
         temperature = response[i]['temperature']
@@ -194,14 +203,18 @@ for i in tqdm(range(len(response))):
             print("model name error")
 
         with torch.no_grad():
-            input_ids = input_ids.to(model.device)
-            logits_dict, outputs = model(
-                    input_ids=input_ids,
-                    return_dict=True,
-                    output_attentions=True,
-                    output_hidden_states=True,
-                    knowledge_layers=list(range(start, number))
-                )
+            if len(input_text) > 5500:
+                print(f"[CPU] seq_len={len(input_text)} exceeds threshold")
+                model.to("cpu")
+                input_ids = input_ids.to(model.device)
+                logits_dict, outputs = run_forward(model, input_ids, start, number)
+                model.to(device)
+                torch.cuda.empty_cache()
+            else:
+                print(f"[GPU] seq_len={len(input_text)}")
+                input_ids = input_ids.to(model.device)
+                logits_dict, outputs = run_forward(model, input_ids, start, number)
+            
         logits_dict = {key: [value[0].to(device), value[1].to(device)] for key, value in logits_dict.items()}
 
         # skip tokens without hallucination

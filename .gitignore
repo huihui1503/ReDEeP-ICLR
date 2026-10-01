@@ -9,3 +9,9 @@ dataset/
 # Log files
 ReDeEP/log/
 ReDeEP/log/
+
+/__pycache__/
+ReDeEP/log/test_llama2_7B/llama2_7B_response_v1.json
+# Python cache files
+__pycache__/
+*.pyc
