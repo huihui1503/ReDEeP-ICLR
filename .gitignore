@@ -15,3 +15,8 @@ ReDeEP/log/test_llama2_7B/llama2_7B_response_v1.json
 # Python cache files
 __pycache__/
 *.pyc
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
