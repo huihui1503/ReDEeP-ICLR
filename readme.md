@@ -21,11 +21,15 @@ The dataset is available at: [google drive](https://drive.google.com/file/d/1tXa
 **ReDeEP(Chunk)**
 ```bash
 python ./ReDeEP/chunk_level_detect.py --model_name llama2-7b/llama2-13b/llama3-8b --dataset ragtruth/dolly
+python ./ReDeEP/chunk_level_detect.py --model_name llama2-7b --dataset ragtruth
+
+
+
 python ./ReDeEP/chunk_level_reg.py --model_name llama2-7b/llama2-13b/llama3-8b --dataset ragtruth/dolly
 
-python -m debugpy --listen 5678 --wait-for-client ./ReDeEP/chunk_level_reg.py --model_name llama2-7b --dataset ragtruth
+python -m debugpy --listen 5678 --wait-for-client ./ReDeEP/chunk_level_reg.py --model_name llama2-7b --dataset dolly
 
-python ./ReDeEP/chunk_level_reg.py --model_name llama2-7b --dataset ragtruth
+
 
 python -m debugpy --listen 5678 --wait-for-client ./ReDeEP/chunk_level_reg.py --model_name llama2-7b --dataset ragtruth
 ```
@@ -38,7 +42,7 @@ python -m debugpy --listen 5678 --wait-for-client ./ReDeEP/token_level_detect.py
 python -m debugpy --listen 5678 --wait-for-client ./ReDeEP/token_level_reg.py --model_name llama2-7b --dataset hallurag
 
 python ./ReDeEP/token_level_reg.py --model_name llama2-7b/llama2-13b/llama3-8b --dataset ragtruth/dolly
-python ./ReDeEP/token_level_reg.py --model_name llama3-8b --dataset dolly
+python -m debugpy --listen 5678 --wait-for-client ./ReDeEP/token_level_reg.py --model_name llama2-13b --dataset ragtruth
 
 
 

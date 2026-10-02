@@ -255,7 +255,9 @@ if __name__ == "__main__":
     elif args.model_name == "llama2-13b":
         topk_head_path = "./ReDeEP/log/test_llama2_13B/topk_heads.json"
     elif args.model_name == "llama3-8b":
-        topk_head_path =  "./ReDeEP/log/test_llama3_8B/topk_heads.json" 
+        topk_head_path =  "./ReDeEP/log/test_llama3_8B/topk_heads.json"
+    elif args.model_name == "mistral-7b":
+        topk_head_path =  "./ReDeEP/log/test_mistral2_7B/topk_heads.json"
     else:
         print("model name error")
         exit(-1)
@@ -270,18 +272,28 @@ if __name__ == "__main__":
             data_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_v1.json"
         elif args.dataset == "dolly":
             data_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_v1_dolly.json"
+        elif args.dataset == "hallurag":
+            data_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_v1_hallurag.json"
         number = 32
     elif args.model_name == "llama2-13b":
         if args.dataset == "ragtruth":
             data_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_v1.json"
         elif args.dataset == "dolly":
             data_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_v1_dolly.json"
+        elif args.dataset == "hallurag":
+            data_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_v1_hallurag.json"
         number = 32
     elif args.model_name == "llama3-8b":
         if args.dataset == "ragtruth":
             data_path = "./ReDeEP/log/test_llama3_8B/llama3_8B_response_v1.json"
         elif args.dataset == "dolly":
             data_path = "./ReDeEP/log/test_llama3_8B/llama3_8B_response_v1_dolly.json"
+        number = 32
+    elif args.model_name == "mistral-7b":
+        if args.dataset == "ragtruth":
+            data_path = "./ReDeEP/log/test_mistral2_7B/mistral2_7B_response_v1.json"
+        elif args.dataset == "hallurag":
+            data_path = "./ReDeEP/log/test_mistral2_7B/mistral2_7B_response_hallurag.json"
         number = 32
     else:
         print("model name error")
@@ -292,12 +304,22 @@ if __name__ == "__main__":
             i, j, k, m = 1, 10, 0.2, 1
         elif args.dataset == "dolly":
             i, j , k, m = 4, 3, 0.2, 1
+        elif args.dataset == "hallurag":
+            i, j, k, m = 1, 10, 0.2, 1
+
+    elif args.model_name == "llama2-7b":
+        if args.dataset == "ragtruth":
+            i, j, k, m = 1, 10, 0.2, 1
+        elif args.dataset == "hallurag":
+            i, j, k, m = 1, 10, 0.2, 1
 
     elif args.model_name == "llama2-13b":
         if args.dataset == "ragtruth":
             i, j, k, m = 2, 17, 0.6, 1
         elif args.dataset == "dolly":
             i, j, k, m = 4, 5, 0.6, 1
+        elif args.dataset == "hallurag":
+            i, j, k, m = 2, 17, 0.6, 1
         
     elif args.model_name == "llama3-8b":
         if args.dataset == "ragtruth":
@@ -307,9 +329,12 @@ if __name__ == "__main__":
     else:
         print("model name error")
         exit(-1)
-
-    with open(data_path, "r") as f:
-        response = json.load(f)
+    response = []
+    with open(data_path, encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                response.append(json.loads(line))
+            
     response_train = [i for i in response if i["split"] == "train"]
     response_test = [i for i in response if i["split"] == "test"]
 

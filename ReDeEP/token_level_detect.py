@@ -58,6 +58,8 @@ elif args.model_name == "llama2-13b":
     model_name = "meta-llama/Llama-2-13b-chat-hf"
 elif args.model_name == "llama3-8b":
     model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
+elif args.model_name == "mistral-7b":
+    model_name = "mistralai/Mistral-7B-Instruct-v0.1"
 
 
 model = AutoModelForCausalLM.from_pretrained(
@@ -81,6 +83,8 @@ elif args.model_name == "llama2-13b":
     topk_head_path = "./ReDeEP/log/test_llama2_13B/topk_heads.json"
 elif args.model_name == "llama3-8b":
     topk_head_path = "./ReDeEP/log/test_llama3_8B/topk_heads.json"
+elif args.model_name == "mistral-7b":
+    topk_head_path =  "./ReDeEP/log/test_mistral2_7B/topk_heads.json"
 else:
     print("model name error")
     exit(-1)
@@ -158,7 +162,9 @@ if args.model_name == "llama2-7b":
 elif args.model_name == "llama2-13b":
     data_type = "llama-2-13b-chat"
 elif args.model_name == "llama3-8b":
-    data_type =  "llama-3-8b-instruct" 
+    data_type =  "llama-3-8b-instruct"
+elif args.model_name == "mistral-7b":
+    data_type =  "mistral-7B-instruct" 
 else:
     print("model name error")
     exit(-1) 
@@ -182,6 +188,11 @@ elif args.model_name == "llama3-8b":
         save_path = "./ReDeEP/log/test_llama3_8B/llama3_8B_response_v1.json"
     elif args.dataset == "dolly":
         save_path = "./ReDeEP/log/test_llama3_8B/llama3_8B_response_v1_dolly.json"
+elif args.model_name == "mistral-7b":
+    if args.dataset == "ragtruth":
+        save_path = "./ReDeEP/log/test_mistral2_7B/mistral2_7B_response_v1.json"
+    elif args.dataset == "hallurag":
+        save_path = "./ReDeEP/log/test_mistral2_7B/mistral2_7B_response_hallurag.json"
 else:
     print("model name error")
     exit(-1)

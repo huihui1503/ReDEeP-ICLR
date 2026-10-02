@@ -26,8 +26,14 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+source_info_path = ""
+if args.dataset == "ragtruth":
+    source_info_path = "../ReDEeP-ICLR/dataset/source_info.jsonl"
+elif args.dataset == "dolly":
+    source_info_path = "../ReDEeP-ICLR/dataset/source_info_dolly.jsonl"
+elif args.dataset == "hallurag":
+    source_info_path = "../ReDEeP-ICLR/dataset/hallurag/hallu_rag_data.jsonl"
 
-source_info_path = "../ReDEeP-ICLR/dataset/source_info.jsonl"
 source_info_dict = {}
 
 with open(source_info_path, 'r') as f:
@@ -48,8 +54,6 @@ def construct_dataframe(response, number):
     }
   
     for i, resp in enumerate(response):
-        if resp["split"] != "test":
-            continue
         respond_ids = resp["source_id"]
         rep_type = source_info_dict[respond_ids]["task_type"]
 
@@ -59,10 +63,20 @@ def construct_dataframe(response, number):
             for k in range(number):
                 data_dict[f"external_similarity_{k}"].append(list(resp["scores"][j]["prompt_attention_score"].values())[k])
                 data_dict[f"parameter_knowledge_difference_{k}"].append(list(resp["scores"][j]["parameter_knowledge_scores"].values())[k])
-            data_dict["hallucination_label"].append(resp["scores"][j]["hallucination_label"])
+
+
+            label_list = resp.get("label")
+            if label_list is not None:
+                data_dict["hallucination_label"].append(1 if len(label_list) > 0 else 0)
+            else:
+                data_dict["hallucination_label"].append(resp["scores"][j]["hallucination_label"])
+
         if i == len(response)-1:
             ext_map_dict = {f"external_similarity_{k}":list(resp["scores"][j]["prompt_attention_score"].keys())[k] for k in range(number)}
             para_map_dict = {f"parameter_knowledge_difference_{k}":list(resp["scores"][j]["parameter_knowledge_scores"].keys())[k] for k in range(number)}
+
+    if len(data_dict["type"]) == 0:
+        data_dict.pop("type")
 
     df = pd.DataFrame(data_dict)
 
@@ -267,20 +281,30 @@ if __name__ == "__main__":
     if args.model_name == "llama2-7b":
         if args.dataset == "ragtruth":
             data_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_chunk.json"
-        elif args.dataset == "ragtruth":
+        elif args.dataset == "dolly":
             data_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_chunk_dolly.json"
+        elif args.dataset == "hallurag":
+            data_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_chunk_hallurag.json"
         number = 32
     elif args.model_name == "llama2-13b":
         if args.dataset == "ragtruth":
             data_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_chunk.json"
-        elif args.dataset == "ragtruth":
+        elif args.dataset == "dolly":
             data_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_chunk_dolly.json"
+        elif args.dataset == "hallurag":
+            data_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_chunk_hallurag.json"
         number = 32
     elif args.model_name == "llama3-8b":
         if args.dataset == "ragtruth":
             data_path = "./ReDeEP/log/test_llama3_8B/llama3_8B_response_chunk.json"
         elif args.dataset == "dolly":
             data_path = "./ReDeEP/log/test_llama3_8B/llama3_8B_response_chunk_dolly.json"
+        number = 32
+    elif args.model_name == "mistral-7b":
+        if args.dataset == "ragtruth":
+            data_path = "./ReDeEP/log/test_mistral2_7B/mistral2_7B_response_chunk.json"
+        elif args.dataset == "hallurag":
+            data_path = "./ReDeEP/log/test_mistral2_7B/mistral2_7B_response_chunk_hallurag.json"
         number = 32
     else:
         print("model name error")
@@ -291,12 +315,22 @@ if __name__ == "__main__":
             i, j, k, m = 3, 4, 0.6, 1
         elif args.dataset == "dolly":
             i, j , k, m = 7, 3, 1.6, 1
+        elif args.dataset == "hallurag":
+            i, j, k, m = 3, 4, 0.6, 1
+
+    elif args.model_name == "mistral-7b":
+        if args.dataset == "ragtruth":
+            i, j, k, m = 3, 4, 0.6, 1
+        elif args.dataset == "hallurag":
+            i, j, k, m = 3, 4, 0.6, 1
 
     elif args.model_name == "llama2-13b":
         if args.dataset == "ragtruth":
             i, j, k, m = 9, 3, 1.8, 1
         elif args.dataset == "dolly":
             i, j, k, m = 11, 3, 0.2, 1
+        elif args.dataset == "hallurag":
+            i, j, k, m = 9, 3, 1.8, 1
         
     elif args.model_name == "llama3-8b":
         if args.dataset == "ragtruth":
@@ -307,8 +341,12 @@ if __name__ == "__main__":
         print("model name error")
         exit(-1)
 
-    with open(data_path, "r") as f:
-        response = json.load(f)
+    response = []
+    with open(data_path, encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                response.append(json.loads(line))
+    
     response_train = [i for i in response if i["split"] == "train"]
     response_test = [i for i in response if i["split"] == "test"]
 
