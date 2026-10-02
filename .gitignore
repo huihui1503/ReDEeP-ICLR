@@ -22,3 +22,15 @@ __pycache__/
 *.pyd__pycache__/
 __pycache__/
 *.pyc
+# Python cache
+__pycache__/
+*.py[cod]
+
+# VS Code
+.vscode/
+
+# Logs and generated outputs
+ReDeEP/log/
+
+# Optional: ignore JSON outputs if generated automatically
+ReDeEP/log/**/*.json
