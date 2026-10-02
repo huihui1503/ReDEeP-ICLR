@@ -152,7 +152,7 @@ def run_forward(model, input_ids, start, number):
         knowledge_layers=list(range(start, number))
     )
 
-select_response = []
+
 if args.model_name == "llama2-7b":
     data_type = "llama-2-7b-chat"
 elif args.model_name == "llama2-13b":
@@ -162,153 +162,6 @@ elif args.model_name == "llama3-8b":
 else:
     print("model name error")
     exit(-1) 
-
-for i in tqdm(range(len(response))):
-    if response[i]['model'] == data_type:
-        response_rag = response[i]['response']
-        if args.dataset != "hallurag":
-            source_id = response[i]['source_id']
-            temperature = response[i]['temperature']
-            prompt =  source_info_dict[source_id]['prompt']
-        else:
-            temperature = 0.0
-            prompt =  response[i]['prompt']
-        messages = [
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": prompt[:12000]}
-                ]
-        text = tokenizer_for_temp.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True
-        )
-        print(text)
-        input_text = text+response_rag
-        print("all_text_len:", len(input_text))
-        print("prompt_len", len(prompt))
-        print("respond_len", len(response_rag))
-        input_ids = tokenizer([input_text], return_tensors="pt").input_ids
-        prefix_ids = tokenizer([text], return_tensors="pt").input_ids
-        continue_ids = input_ids[0, prefix_ids.shape[-1]:] # todo 这边要改成幻觉 token 的起止位置
-        if args.model_name == "llama3-8b" and args.dataset == "ragtruth":
-            hallucination_spans = []
-        elif "labels" in response[i].keys():
-            hallucination_spans = calculate_hallucination_spans(response[i]['labels'], text, response_rag, tokenizer, prefix_ids.shape[-1])
-        else:
-            hallucination_spans = []
-
-        start_p, end_p = None, None
-        if args.model_name == "llama2-7b":
-            start = 0 
-            number = 32
-        elif args.model_name == "llama3-8b":
-            start = 0
-            number = 32 
-        elif args.model_name == "llama2-13b":
-            start = 0
-            number = 40
-        else:
-            print("model name error")
-
-        with torch.no_grad():
-            if len(input_text) > 5500:
-                print(f"[CPU] seq_len={len(input_text)} exceeds threshold")
-                model.to("cpu")
-                input_ids = input_ids.to(model.device)
-                logits_dict, outputs = run_forward(model, input_ids, start, number)
-                model.to(device)
-                torch.cuda.empty_cache()
-            else:
-                print(f"[GPU] seq_len={len(input_text)}")
-                input_ids = input_ids.to(model.device)
-                logits_dict, outputs = run_forward(model, input_ids, start, number)
-            
-        logits_dict = {key: [value[0].to(device), value[1].to(device)] for key, value in logits_dict.items()}
-
-        # skip tokens without hallucination
-        hidden_states = outputs["hidden_states"] # tuple ([batch, seq_len, vocab_size], ..., ) 
-        last_hidden_states = hidden_states[-1][0, :, :] # [prefix_len, hidden_size]
-        
-        # todo 修改成 筛选 teacher focusing 的 token 和 model generate token 是否在 top_10内
-        # probs = outputs['logits'][range(outputs["logits"].shape[0]), continue_ids].sum().item()
-        # # ---------------------------------------------------------------------------------------------------------------
-        external_similarity = [] # 这个用来存储生成的 token embedding 和 copy head 关注的 token embedding 的相似度得分
-        parameter_knowledge_difference = []
-        hallucination_label = []
-        # 计算一下输入的 context 里面有没有 hallucination 词，如果有的话 copy 的时候把他们的 pointer weight 调小
-        # input: input_ids, corr token vocab distribution
-        # output: hallucination score for the input_ids or hallucination mask
-        # outputs.attentions is a tuple, taking the last layer's attentions
-        attentions_list = []
-        for attentions_layer_id in range(len(outputs.attentions)):
-            for head_id in range(outputs.attentions[attentions_layer_id].shape[1]):
-                if [attentions_layer_id, head_id] not in copy_heads:
-                    continue
-                attentions_list.append({"layer_head":(attentions_layer_id, head_id), "attention_score":outputs.attentions[attentions_layer_id][:,head_id,:,:]}) 
-
-        # Step 1: Average the attention across the number of heads
-        for seq_i in range(prefix_ids.shape[-1] - 1, input_ids.shape[-1] - 1):
-
-            # Step 2: Extract the non-zero values from the last row/column
-            # Now we gather the attention scores for the last token of each sequence
-            pointer_scores_list = [attention_dict["attention_score"][:, seq_i, :] for attention_dict in attentions_list] # shape: (batch_size, sequence_length)
-
-            # Step 3: Perform a softmax over the modified attention scores
-            # pointer_probs = nn.F.softmax(pointer_scores, dim=-1)  # shape: (batch_size, sequence_length)
-            if start_p != None and  end_p != None:
-                pointer_probs_list =  torch.cat([pointer_scores[:,start_p:end_p] for pointer_scores in pointer_scores_list], dim=0)
-            else:
-                pointer_probs_list =  torch.cat([pointer_scores[:,:prefix_ids.shape[-1]] for pointer_scores in pointer_scores_list], dim=0)   # shape: (batch_size, prefix_sequence_length) 截取这一步还是只让模型关注文本内容
-
-            # Step 4: select the top attented token
-            # Create an extended attention mask that masks out special tokens
-            # hyperparameter: token rate
-
-            # pointer_probs_list 是每个位置对应的大小(head_num, seq_len)，last_hidden_states shape (seq_len, hidden_state)是每个位置对应的 value，请取出 top 10% input_ids_cp 的 last_hidden_states，最终输出为(head_num, top10_len, hidden_state)
-            # 获取top 10%的索引
-            top_k = int(pointer_probs_list.shape[-1] * 0.1)  # 10% of sequence length
-
-            # 获取排序后的索引，按照概率从大到小排序
-            sorted_indices = torch.argsort(pointer_probs_list, dim=1, descending=True)
-
-            # 选择前top_k个索引
-            top_k_indices = sorted_indices[:, :top_k]
-
-            # 我们需要将 top_k_indices 展平，以便用于索引 last_hidden_states
-            flattened_indices = top_k_indices.flatten()  # shape (head_num * k,)
-            # 使用展平的索引在 last_hidden_states 中查找相应的 hidden_state
-            selected_hidden_states = last_hidden_states[flattened_indices]  # shape (head_num * k, hidden_state)
-            # 重新 reshape 成 (head_num, k, hidden_state)
-            top_k_hidden_states = selected_hidden_states.view(top_k_indices.shape[0], top_k_indices.shape[1], -1)
-
-            attend_token_hidden_state = torch.mean(top_k_hidden_states, dim=1) # (head_num, hidden_state)
-
-            # Step 5: Calculate the similarity between the last token and the attentioned prefix text
-            current_hidden_state = last_hidden_states[seq_i, :] # shape (hidden_state,)
-
-            # 扩展 current_hidden_state 的形状以匹配 pointer_probs_list
-            current_hidden_state = current_hidden_state.unsqueeze(0).expand(attend_token_hidden_state.shape)
-
-            # 计算余弦相似度
-            cosine_similarity = F.cosine_similarity(attend_token_hidden_state.to(device), current_hidden_state.to(device), dim=1)
-            if is_hallucination_token(seq_i, hallucination_spans):
-                hallucination_label.append(1)
-            else:
-                hallucination_label.append(0)
-            external_similarity.append(cosine_similarity.cpu().tolist())
-            parameter_knowledge_difference.append([calculate_dist(value[0][0,seq_i,:], value[1][0,seq_i,:]) for value in logits_dict.values()])
-            torch.cuda.empty_cache()
-        response[i]["external_similarity"] = external_similarity
-        response[i]["parameter_knowledge_difference"] = parameter_knowledge_difference
-        response[i]["hallucination_label"] = hallucination_label
-
-
-        select_response.append(response[i])
-        # if len(select_response)>10:
-        #     break
-
-# with open("./data/llama2_7B_response.json", "w") as f:
-#     json.dump(select_response, f, indent=4, ensure_ascii=False)
 
 if args.model_name == "llama2-7b":
     if args.dataset == "ragtruth":
@@ -333,5 +186,151 @@ else:
     print("model name error")
     exit(-1)
 
-with open(save_path, "w") as f:
-    json.dump(select_response, f, ensure_ascii=False)  
+with open(save_path, "w", encoding="utf-8") as f:
+    for i in tqdm(range(len(response))):
+        if response[i]['model'] == data_type:
+            response_rag = response[i]['response']
+            if args.dataset != "hallurag":
+                source_id = response[i]['source_id']
+                temperature = response[i]['temperature']
+                prompt =  source_info_dict[source_id]['prompt']
+            else:
+                temperature = 0.0
+                prompt =  response[i]['prompt']
+            messages = [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": prompt[:12000]}
+                    ]
+            text = tokenizer_for_temp.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True
+            )
+            # print(text)
+            input_text = text+response_rag
+            # print("all_text_len:", len(input_text))
+            # print("prompt_len", len(prompt))
+            # print("respond_len", len(response_rag))
+            input_ids = tokenizer([input_text], return_tensors="pt").input_ids
+            prefix_ids = tokenizer([text], return_tensors="pt").input_ids
+            continue_ids = input_ids[0, prefix_ids.shape[-1]:] # todo 这边要改成幻觉 token 的起止位置
+            if args.model_name == "llama3-8b" and args.dataset == "ragtruth":
+                hallucination_spans = []
+            elif "labels" in response[i].keys():
+                hallucination_spans = calculate_hallucination_spans(response[i]['labels'], text, response_rag, tokenizer, prefix_ids.shape[-1])
+            else:
+                hallucination_spans = []
+
+            start_p, end_p = None, None
+            if args.model_name == "llama2-7b":
+                start = 0 
+                number = 32
+            elif args.model_name == "llama3-8b":
+                start = 0
+                number = 32 
+            elif args.model_name == "llama2-13b":
+                start = 0
+                number = 40
+            else:
+                print("model name error")
+
+            with torch.no_grad():
+                # if len(input_text) > 9900:
+                #     print(f"[CPU] seq_len={len(input_text)} exceeds threshold")
+                #     model.to("cpu")
+                #     input_ids = input_ids.to(model.device)
+                #     logits_dict, outputs = run_forward(model, input_ids, start, number)
+                #     model.to(device)
+                #     torch.cuda.empty_cache()
+                # else:
+                print(f"[GPU] seq_len={len(input_text)}")
+                input_ids = input_ids.to(model.device)
+                logits_dict, outputs = run_forward(model, input_ids, start, number)
+                
+            logits_dict = {key: [value[0].to(device), value[1].to(device)] for key, value in logits_dict.items()}
+
+            # skip tokens without hallucination
+            hidden_states = outputs["hidden_states"] # tuple ([batch, seq_len, vocab_size], ..., ) 
+            last_hidden_states = hidden_states[-1][0, :, :] # [prefix_len, hidden_size]
+            
+            # todo 修改成 筛选 teacher focusing 的 token 和 model generate token 是否在 top_10内
+            # probs = outputs['logits'][range(outputs["logits"].shape[0]), continue_ids].sum().item()
+            # # ---------------------------------------------------------------------------------------------------------------
+            external_similarity = [] # 这个用来存储生成的 token embedding 和 copy head 关注的 token embedding 的相似度得分
+            parameter_knowledge_difference = []
+            hallucination_label = []
+            # 计算一下输入的 context 里面有没有 hallucination 词，如果有的话 copy 的时候把他们的 pointer weight 调小
+            # input: input_ids, corr token vocab distribution
+            # output: hallucination score for the input_ids or hallucination mask
+            # outputs.attentions is a tuple, taking the last layer's attentions
+            attentions_list = []
+            for attentions_layer_id in range(len(outputs.attentions)):
+                for head_id in range(outputs.attentions[attentions_layer_id].shape[1]):
+                    if [attentions_layer_id, head_id] not in copy_heads:
+                        continue
+                    attentions_list.append({"layer_head":(attentions_layer_id, head_id), "attention_score":outputs.attentions[attentions_layer_id][:,head_id,:,:]}) 
+
+            # Step 1: Average the attention across the number of heads
+            for seq_i in range(prefix_ids.shape[-1] - 1, input_ids.shape[-1] - 1):
+
+                # Step 2: Extract the non-zero values from the last row/column
+                # Now we gather the attention scores for the last token of each sequence
+                pointer_scores_list = [attention_dict["attention_score"][:, seq_i, :] for attention_dict in attentions_list] # shape: (batch_size, sequence_length)
+
+                # Step 3: Perform a softmax over the modified attention scores
+                # pointer_probs = nn.F.softmax(pointer_scores, dim=-1)  # shape: (batch_size, sequence_length)
+                if start_p != None and  end_p != None:
+                    pointer_probs_list =  torch.cat([pointer_scores[:,start_p:end_p] for pointer_scores in pointer_scores_list], dim=0)
+                else:
+                    pointer_probs_list =  torch.cat([pointer_scores[:,:prefix_ids.shape[-1]] for pointer_scores in pointer_scores_list], dim=0)   # shape: (batch_size, prefix_sequence_length) 截取这一步还是只让模型关注文本内容
+
+                # Step 4: select the top attented token
+                # Create an extended attention mask that masks out special tokens
+                # hyperparameter: token rate
+
+                # pointer_probs_list 是每个位置对应的大小(head_num, seq_len)，last_hidden_states shape (seq_len, hidden_state)是每个位置对应的 value，请取出 top 10% input_ids_cp 的 last_hidden_states，最终输出为(head_num, top10_len, hidden_state)
+                # 获取top 10%的索引
+                top_k = int(pointer_probs_list.shape[-1] * 0.1)  # 10% of sequence length
+
+                # 获取排序后的索引，按照概率从大到小排序
+                sorted_indices = torch.argsort(pointer_probs_list, dim=1, descending=True)
+
+                # 选择前top_k个索引
+                top_k_indices = sorted_indices[:, :top_k]
+
+                # 我们需要将 top_k_indices 展平，以便用于索引 last_hidden_states
+                flattened_indices = top_k_indices.flatten()  # shape (head_num * k,)
+                # 使用展平的索引在 last_hidden_states 中查找相应的 hidden_state
+                selected_hidden_states = last_hidden_states[flattened_indices]  # shape (head_num * k, hidden_state)
+                # 重新 reshape 成 (head_num, k, hidden_state)
+                top_k_hidden_states = selected_hidden_states.view(top_k_indices.shape[0], top_k_indices.shape[1], -1)
+
+                attend_token_hidden_state = torch.mean(top_k_hidden_states, dim=1) # (head_num, hidden_state)
+
+                # Step 5: Calculate the similarity between the last token and the attentioned prefix text
+                current_hidden_state = last_hidden_states[seq_i, :] # shape (hidden_state,)
+
+                # 扩展 current_hidden_state 的形状以匹配 pointer_probs_list
+                current_hidden_state = current_hidden_state.unsqueeze(0).expand(attend_token_hidden_state.shape)
+
+                # 计算余弦相似度
+                cosine_similarity = F.cosine_similarity(attend_token_hidden_state.to(device), current_hidden_state.to(device), dim=1)
+                if is_hallucination_token(seq_i, hallucination_spans):
+                    hallucination_label.append(1)
+                else:
+                    hallucination_label.append(0)
+                external_similarity.append(cosine_similarity.cpu().tolist())
+                parameter_knowledge_difference.append([calculate_dist(value[0][0,seq_i,:], value[1][0,seq_i,:]) for value in logits_dict.values()])
+                torch.cuda.empty_cache()
+            response[i]["external_similarity"] = external_similarity
+            response[i]["parameter_knowledge_difference"] = parameter_knowledge_difference
+            response[i]["hallucination_label"] = hallucination_label
+
+
+            f.write(json.dumps(response[i], ensure_ascii=False) + "\n")
+            f.flush()
+            del outputs, logits_dict, attentions_list, last_hidden_states
+            torch.cuda.empty_cache()
+
+# with open("./data/llama2_7B_response.json", "w") as f:
+#     json.dump(select_response, f, indent=4, ensure_ascii=False)

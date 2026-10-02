@@ -32,21 +32,27 @@ if args.dataset == "ragtruth":
         response_path = "../ReDEeP-ICLR/dataset/response_spans.jsonl"
 elif args.dataset == "dolly":
     response_path = "../ReDEeP-ICLR/dataset/response_dolly_spans.jsonl"
+elif args.dataset == "hallurag":
+    response_path = "../ReDEeP-ICLR/dataset/hallurag/hallu_rag_data.jsonl"
+
 response = []
 with open(response_path, 'r') as f:
     for line in f:
         data = json.loads(line)
         response.append(data)
+
+# Source info
 if args.dataset == "ragtruth":
     source_info_path = "../ReDEeP-ICLR/dataset/source_info_spans.jsonl"
 elif args.dataset == "dolly":
     source_info_path = "../ReDEeP-ICLR/dataset/source_info_dolly_spans.jsonl"
-source_info_dict = {}
 
-with open(source_info_path, 'r') as f:
-    for line in f:
-        data = json.loads(line)
-        source_info_dict[data['source_id']] = data
+source_info_dict = {}
+if args.dataset != "hallurag":
+    with open(source_info_path, 'r') as f:
+        for line in f:
+            data = json.loads(line)
+            source_info_dict[data['source_id']] = data
 
 
 if args.model_name == "llama2-7b":
@@ -236,9 +242,14 @@ else:
 for i in tqdm(range(len(response))):
     if response[i]['model'] == data_type:
         response_rag = response[i]['response']
-        source_id = response[i]['source_id']
-        temperature = response[i]['temperature']
-        prompt =  source_info_dict[source_id]['prompt']
+        if args.dataset != "hallurag":
+            source_id = response[i]['source_id']
+            temperature = response[i]['temperature']
+            prompt =  source_info_dict[source_id]['prompt']
+        else:
+            temperature = 0.0
+            prompt =  response[i]['prompt']
+        
         original_prompt_spans = source_info_dict[source_id]['prompt_spans']
         original_response_spans = response[i]['response_spans']
 

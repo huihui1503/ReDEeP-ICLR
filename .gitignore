@@ -5,10 +5,12 @@ dataset/
 /log/
 # VS Code settings
 .vscode/
-
+./ReDeEP/log/
 # Log files
 ReDeEP/log/
 ReDeEP/log/
+ReDeEP/log/test_llama2_7B/ReDeEP(chunk).json
+ReDeEP/log/test_llama2_7B/llama2_7B_response_v1.json
 
 /__pycache__/
 ReDeEP/log/test_llama2_7B/llama2_7B_response_v1.json
