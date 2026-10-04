@@ -219,7 +219,8 @@ with open(save_path, "w", encoding="utf-8") as f:
             )
             # print(text)
             input_text = text+response_rag
-            # print("all_text_len:", len(input_text))
+            # print("all_text_len:", len(input_text))logits_dict, outputs = run_forward(model, input_ids, start, number)
+
             # print("prompt_len", len(prompt))
             # print("respond_len", len(response_rag))
             input_ids = tokenizer([input_text], return_tensors="pt").input_ids
@@ -242,18 +243,13 @@ with open(save_path, "w", encoding="utf-8") as f:
             elif args.model_name == "llama2-13b":
                 start = 0
                 number = 40
+            elif args.model_name == "mistral-7b":
+                start = 0 
+                number = 32
             else:
                 print("model name error")
 
             with torch.no_grad():
-                # if len(input_text) > 9900:
-                #     print(f"[CPU] seq_len={len(input_text)} exceeds threshold")
-                #     model.to("cpu")
-                #     input_ids = input_ids.to(model.device)
-                #     logits_dict, outputs = run_forward(model, input_ids, start, number)
-                #     model.to(device)
-                #     torch.cuda.empty_cache()
-                # else:
                 print(f"[GPU] seq_len={len(input_text)}")
                 input_ids = input_ids.to(model.device)
                 logits_dict, outputs = run_forward(model, input_ids, start, number)

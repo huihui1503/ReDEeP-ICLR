@@ -299,7 +299,7 @@ if __name__ == "__main__":
             data_path = "./ReDeEP/log/test_llama3_8B/llama3_8B_response_chunk.json"
         elif args.dataset == "dolly":
             data_path = "./ReDeEP/log/test_llama3_8B/llama3_8B_response_chunk_dolly.json"
-        number = 32
+        number = 16
     elif args.model_name == "mistral-7b":
         if args.dataset == "ragtruth":
             data_path = "./ReDeEP/log/test_mistral2_7B/mistral2_7B_response_chunk.json"

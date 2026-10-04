@@ -273,15 +273,13 @@ with open(save_path, "w", encoding="utf-8") as f:
     for i in tqdm(range(len(response))):
         if response[i]['model'] == data_type:
             response_rag = response[i]['response']
-
+            source_id = response[i]['source_id']
             if args.dataset != "hallurag":
-                source_id = response[i]['source_id']
                 temperature = response[i]['temperature']
                 prompt =  source_info_dict[source_id]['prompt']
                 original_prompt_spans = source_info_dict[source_id]['prompt_spans']
                 original_response_spans = response[i]['response_spans']
             else:
-                source_id = response[i]['id']
                 temperature = 0.0
                 prompt =  response[i]['prompt']
                 original_prompt_spans = response[i]['prompt_spans']
@@ -292,8 +290,9 @@ with open(save_path, "w", encoding="utf-8") as f:
             input_ids = tokenizer([input_text], return_tensors="pt").input_ids
             prefix_ids = tokenizer([text], return_tensors="pt").input_ids
             continue_ids = input_ids[0, prefix_ids.shape[-1]:] # todo 这边要改成幻觉 token 的起止位置
-
-            if "labels" in response[i].keys():
+            if args.model_name == "llama3-8b" and args.dataset == "ragtruth":
+                hallucination_spans = []
+            elif "labels" in response[i].keys():
                 hallucination_spans = calculate_hallucination_spans(response[i]['labels'], text, response_rag, tokenizer, prefix_ids.shape[-1])
             else:
                 hallucination_spans = []
