@@ -80,7 +80,7 @@ def construct_dataframe(response, number):
 
     df = pd.DataFrame(data_dict)
 
-    print(df["hallucination_label"].value_counts(normalize=True))
+    # print(df["hallucination_label"].value_counts(normalize=True))
     return df, ext_map_dict, para_map_dict
 
 

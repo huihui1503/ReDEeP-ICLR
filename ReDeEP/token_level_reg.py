@@ -307,7 +307,7 @@ if __name__ == "__main__":
         elif args.dataset == "hallurag":
             i, j, k, m = 1, 10, 0.2, 1
 
-    elif args.model_name == "llama2-7b":
+    elif args.model_name == "mistral-7b":
         if args.dataset == "ragtruth":
             i, j, k, m = 1, 10, 0.2, 1
         elif args.dataset == "hallurag":
