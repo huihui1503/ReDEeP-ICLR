@@ -62,7 +62,7 @@ elif args.model_name == "llama2-13b":
 elif args.model_name == "llama3-8b":
     model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
 elif args.model_name == "mistral-7b":
-    data_type =  "mistral-7B-instruct" 
+    model_name = "mistralai/Mistral-7B-Instruct-v0.1"
 else:
     print("name error")
     exit(-1)
@@ -237,6 +237,8 @@ elif args.model_name == "llama2-13b":
     data_type = "llama-2-13b-chat"
 elif args.model_name == "llama3-8b":
     data_type =  "llama-3-8b-instruct" 
+elif args.model_name == "mistral-7b":
+    data_type =  "mistral-7B-instruct" 
 else:
     print("model name error")
     exit(-1) 
@@ -308,6 +310,9 @@ with open(save_path, "w", encoding="utf-8") as f:
             elif args.model_name == "llama2-13b":
                 start = 8
                 number = 40
+            elif args.model_name == "mistral-7b":
+                start = 0 
+                number = 32
             else:
                 print("model name error")
 
