@@ -1,0 +1,38 @@
+transformers/
+dataset/
+.log/
+
+/log/
+# VS Code settings
+.vscode/
+./ReDeEP/log/
+# Log files
+ReDeEP/log/
+ReDeEP/log/
+ReDeEP/log/test_llama2_7B/ReDeEP(chunk).json
+ReDeEP/log/test_llama2_7B/llama2_7B_response_v1.json
+
+/__pycache__/
+ReDeEP/log/test_llama2_7B/llama2_7B_response_v1.json
+# Python cache files
+__pycache__/
+*.pyc
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd__pycache__/
+__pycache__/
+*.pyc
+# Python cache
+__pycache__/
+*.py[cod]
+
+# VS Code
+.vscode/
+
+# Logs and generated outputs
+ReDeEP/log/
+
+# Optional: ignore JSON outputs if generated automatically
+ReDeEP/log/**/*.json

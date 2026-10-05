@@ -112,6 +112,7 @@ class MistralConfig(PretrainedConfig):
         pad_token_id=None,
         bos_token_id=1,
         eos_token_id=2,
+        pretraining_tp=1,
         tie_word_embeddings=False,
         rope_theta=10000.0,
         sliding_window=4096,
@@ -134,6 +135,7 @@ class MistralConfig(PretrainedConfig):
         self.hidden_act = hidden_act
         self.initializer_range = initializer_range
         self.rms_norm_eps = rms_norm_eps
+        self.pretraining_tp = pretraining_tp
         self.use_cache = use_cache
         self.rope_theta = rope_theta
         self.attention_dropout = attention_dropout

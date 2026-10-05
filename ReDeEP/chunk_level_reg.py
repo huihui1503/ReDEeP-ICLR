@@ -9,7 +9,8 @@ from scipy.stats import pearsonr
 from sklearn.preprocessing import MinMaxScaler
 import pdb
 from tqdm import tqdm
-from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
+from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, balanced_accuracy_score
+from sklearn.model_selection import RepeatedStratifiedKFold
 
 import argparse
 
@@ -25,8 +26,14 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+source_info_path = ""
+if args.dataset == "ragtruth":
+    source_info_path = "../ReDEeP-ICLR/dataset/source_info.jsonl"
+elif args.dataset == "dolly":
+    source_info_path = "../ReDEeP-ICLR/dataset/source_info_dolly.jsonl"
+elif args.dataset == "hallurag":
+    source_info_path = "../ReDEeP-ICLR/dataset/hallurag/hallu_rag_data.jsonl"
 
-source_info_path = "../dataset/source_info.jsonl"
 source_info_dict = {}
 
 with open(source_info_path, 'r') as f:
@@ -35,11 +42,7 @@ with open(source_info_path, 'r') as f:
         source_info_dict[data['source_id']] = data
 
 
-def construct_dataframe(file_path, number):
-    # Sample data for illustration
-    with open(file_path, "r") as f:
-        response = json.load(f)  
-
+def construct_dataframe(response, number):
     # Create a dataframe to hold the combined information
 
     data_dict = {
@@ -51,8 +54,6 @@ def construct_dataframe(file_path, number):
     }
   
     for i, resp in enumerate(response):
-        if resp["split"] != "test":
-            continue
         respond_ids = resp["source_id"]
         rep_type = source_info_dict[respond_ids]["task_type"]
 
@@ -62,14 +63,24 @@ def construct_dataframe(file_path, number):
             for k in range(number):
                 data_dict[f"external_similarity_{k}"].append(list(resp["scores"][j]["prompt_attention_score"].values())[k])
                 data_dict[f"parameter_knowledge_difference_{k}"].append(list(resp["scores"][j]["parameter_knowledge_scores"].values())[k])
-            data_dict["hallucination_label"].append(resp["scores"][j]["hallucination_label"])
+
+
+            label_list = resp.get("label")
+            if label_list is not None:
+                data_dict["hallucination_label"].append(1 if len(label_list) > 0 else 0)
+            else:
+                data_dict["hallucination_label"].append(resp["scores"][j]["hallucination_label"])
+
         if i == len(response)-1:
             ext_map_dict = {f"external_similarity_{k}":list(resp["scores"][j]["prompt_attention_score"].keys())[k] for k in range(number)}
             para_map_dict = {f"parameter_knowledge_difference_{k}":list(resp["scores"][j]["parameter_knowledge_scores"].keys())[k] for k in range(number)}
 
+    if len(data_dict["type"]) == 0:
+        data_dict.pop("type")
+
     df = pd.DataFrame(data_dict)
 
-    print(df["hallucination_label"].value_counts(normalize=True))
+    # print(df["hallucination_label"].value_counts(normalize=True))
     return df, ext_map_dict, para_map_dict
 
 
@@ -179,7 +190,9 @@ def calculate_auc_pcc_32_32(df, top_n, top_k, alpha, auc_external_similarity, au
     # Calculate AUC for the grouped means
     auc_difference_normalized = roc_auc_score(grouped_df['hallucination_label'], grouped_df['difference_normalized_mean_norm'])
     person_difference_normalized, _ = pearsonr(grouped_df['hallucination_label'], grouped_df['difference_normalized_mean_norm'])
-
+    preds = (grouped_df['difference_normalized_mean_norm'] > 0.5).astype(int)
+    balanced_acc = balanced_accuracy_score(grouped_df['hallucination_label'], preds)
+    macro_f1 = f1_score(grouped_df['hallucination_label'], preds, average="macro")
     # 初始化变量
 
 
@@ -194,47 +207,130 @@ def calculate_auc_pcc_32_32(df, top_n, top_k, alpha, auc_external_similarity, au
     # print("Best Thresholds by Type:", best_thresholds)
     # print("Best Metrics by Type:", best_metrics)
 
-    return auc_difference_normalized, person_difference_normalized
+    return auc_difference_normalized, person_difference_normalized, balanced_acc, macro_f1
+
+def print_summary(metrics: dict, n_splits: int, n_repeats: int):
+    n_splits = n_splits * n_repeats
+    print(f"\n=== Summary (mean ± std across {n_splits} splits, {n_repeats} repeats) ===")
+    for name, values in metrics.items():
+        print(f"{name}: {np.mean(values):.4f} ± {np.std(values):.4f}")
+
+def cross_validate(
+    X,
+    y,
+    i, j, k, m,
+    number,
+    n_splits=4,
+    n_repeats=10,
+    random_state=0,
+):
+    y = np.asarray(y)                      # list of 0/1 -> array
+    X_dummy = np.zeros(len(y))             # stratification only needs y
+
+    cv = RepeatedStratifiedKFold(
+        n_splits=n_splits,
+        n_repeats=n_repeats,
+        random_state=random_state,
+    )
+
+    metrics = {"auroc": [], "balanced_acc": [], "macro_f1": []}
+
+    for split_num, (train_idx, test_idx) in enumerate(cv.split(X_dummy, y), start=1):
+        repeat_num = (split_num - 1) // n_splits + 1
+        fold_num = (split_num - 1) % n_splits + 1
+        X_train = [X[i] for i in train_idx]     # list of objects
+        X_test  = [X[i] for i in test_idx]
+        # y_train, y_test = y[train_idx], y[test_idx]
+
+        # --- your fit / predict here ---
+        df_train, ext_map_dict, para_map_dict = construct_dataframe(X_train, number)
+        auc_external_similarity, _, auc_parameter_knowledge_difference, _ = calculate_auc_pcc(df_train, ext_map_dict, para_map_dict, number)
+
+        df_test, _, _ = construct_dataframe(X_test, number)
+        auroc, person_difference_normalized, balanced_acc, macro_f1 = calculate_auc_pcc_32_32(df_test, i, j, k, auc_external_similarity, auc_parameter_knowledge_difference, m)
+
+        metrics["auroc"].append(auroc)
+        metrics["balanced_acc"].append(balanced_acc)
+        metrics["macro_f1"].append(macro_f1)
+        print(
+            f"[Repeat {repeat_num}/{n_repeats} Fold {fold_num}/{n_splits}] "
+            f"AUROC={auroc:.4f}  BalancedAcc={balanced_acc:.4f}  "
+            f"MacroF1={macro_f1:.4f}"
+        )
+    
+    print_summary(metrics, n_splits=n_splits, n_repeats=n_repeats)
+
+def evaluate_on_test_data(
+    X_train,
+    X_test,
+    i, j, k, m,
+    number):
+    df_train, ext_map_dict, para_map_dict = construct_dataframe(X_train, number)
+    auc_external_similarity, _, auc_parameter_knowledge_difference, _ = calculate_auc_pcc(df_train, ext_map_dict, para_map_dict, number)
+
+    df_test, _, _ = construct_dataframe(X_test, number)
+    auroc, person_difference_normalized, balanced_acc, macro_f1 = calculate_auc_pcc_32_32(df_test, i, j, k, auc_external_similarity, auc_parameter_knowledge_difference, m)
+
+    print(
+        f"AUROC={auroc:.4f}  BalancedAcc={balanced_acc:.4f}  "
+        f"MacroF1={macro_f1:.4f}"
+    )
 
 if __name__ == "__main__":
 
     if args.model_name == "llama2-7b":
         if args.dataset == "ragtruth":
-            data_path = "./log/test_llama2_7B/llama2_7B_response_chunk.json"
-        elif args.dataset == "ragtruth":
-            data_path = "./log/test_llama2_7B/llama2_7B_response_chunk_dolly.json"
+            data_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_chunk.json"
+        elif args.dataset == "dolly":
+            data_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_chunk_dolly.json"
+        elif args.dataset == "hallurag":
+            data_path = "./ReDeEP/log/test_llama2_7B/llama2_7B_response_chunk_hallurag.json"
         number = 32
     elif args.model_name == "llama2-13b":
         if args.dataset == "ragtruth":
-            data_path = "./log/test_llama2_13B/llama2_13B_response_chunk.json"
-        elif args.dataset == "ragtruth":
-            data_path = "./log/test_llama2_13B/llama2_13B_response_chunk_dolly.json"
+            data_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_chunk.json"
+        elif args.dataset == "dolly":
+            data_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_chunk_dolly.json"
+        elif args.dataset == "hallurag":
+            data_path = "./ReDeEP/log/test_llama2_13B/llama2_13B_response_chunk_hallurag.json"
         number = 32
     elif args.model_name == "llama3-8b":
         if args.dataset == "ragtruth":
-            data_path = "./log/test_llama3_8B/llama3_8B_response_chunk.json"
+            data_path = "./ReDeEP/log/test_llama3_8B/llama3_8B_response_chunk.json"
         elif args.dataset == "dolly":
-            data_path = "./log/test_llama3_8B/llama3_8B_response_chunk_dolly.json"
+            data_path = "./ReDeEP/log/test_llama3_8B/llama3_8B_response_chunk_dolly.json"
+        number = 16
+    elif args.model_name == "mistral-7b":
+        if args.dataset == "ragtruth":
+            data_path = "./ReDeEP/log/test_mistral2_7B/mistral2_7B_response_chunk.json"
+        elif args.dataset == "hallurag":
+            data_path = "./ReDeEP/log/test_mistral2_7B/mistral2_7B_response_chunk_hallurag.json"
         number = 32
     else:
         print("model name error")
         exit(-1)
-
-    df, ext_map_dict, para_map_dict = construct_dataframe(data_path, number)
-
-    auc_external_similarity, _, auc_parameter_knowledge_difference, _ = calculate_auc_pcc(df.iloc[:, :int(df.shape[1] * 0.5)], ext_map_dict, para_map_dict, number)
 
     if args.model_name == "llama2-7b":
         if args.dataset == "ragtruth":
             i, j, k, m = 3, 4, 0.6, 1
         elif args.dataset == "dolly":
             i, j , k, m = 7, 3, 1.6, 1
+        elif args.dataset == "hallurag":
+            i, j, k, m = 3, 4, 0.6, 1
+
+    elif args.model_name == "mistral-7b":
+        if args.dataset == "ragtruth":
+            i, j, k, m = 3, 4, 0.6, 1
+        elif args.dataset == "hallurag":
+            i, j, k, m = 3, 4, 0.6, 1
 
     elif args.model_name == "llama2-13b":
         if args.dataset == "ragtruth":
             i, j, k, m = 9, 3, 1.8, 1
         elif args.dataset == "dolly":
             i, j, k, m = 11, 3, 0.2, 1
+        elif args.dataset == "hallurag":
+            i, j, k, m = 9, 3, 1.8, 1
         
     elif args.model_name == "llama3-8b":
         if args.dataset == "ragtruth":
@@ -244,21 +340,53 @@ if __name__ == "__main__":
     else:
         print("model name error")
         exit(-1)
+
+    response = []
+    with open(data_path, encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                response.append(json.loads(line))
     
-    auc_difference_normalized, person_difference_normalized = calculate_auc_pcc_32_32(df, i, j, k, auc_external_similarity, auc_parameter_knowledge_difference, m)
-    if args.model_name == "llama2-7b":
-        save_path = "./log/test_llama2_7B/ReDeEP(chunk).json"
-    elif args.model_name == "llama2-13b":
-        save_path = "./log/test_llama2_13B/ReDeEP(chunk).json"
-    elif args.model_name == "llama3-8b":
-        save_path = "./log/test_llama3_8B/ReDeEP(chunk).json"
+    response_train = [i for i in response if i["split"] == "train"]
+    response_test = [i for i in response if i["split"] == "test"]
+
+    if len(response_train) == 0:
+        print(f"Run cross validation on {args.model_name} and {args.dataset}")
+        labels = [1 if len(i["labels"]) > 0 else 0 for i in response_test]
+        cross_validate(
+            X=response_test,
+            y=labels,
+            i=i, j=j, k=k, m=m, number=number,
+            n_splits=4,
+            n_repeats=10,
+            random_state=0,
+        )
     else:
-        print("model name error")
-        exit(-1)
-    result_dict = {"auc":auc_difference_normalized, "pcc": person_difference_normalized}
-    print(result_dict)
-    with open(save_path, 'w') as f:
-        json.dump(result_dict, f, ensure_ascii=False)
+        print(f"Run evaluation on {args.model_name} and {args.dataset}")
+        evaluate_on_test_data(
+            X_train=response_train,
+            X_test=response_test,
+            i=i, j=j, k=k, m=m, number=number,
+        )
+
+    # df, ext_map_dict, para_map_dict = construct_dataframe(data_path, number)
+
+    # auc_external_similarity, _, auc_parameter_knowledge_difference, _ = calculate_auc_pcc(df, ext_map_dict, para_map_dict, number)
+
+    # auc_difference_normalized, person_difference_normalized = calculate_auc_pcc_32_32(df, i, j, k, auc_external_similarity, auc_parameter_knowledge_difference, m)
+    # if args.model_name == "llama2-7b":
+    #     save_path = "./ReDeEP/log/test_llama2_7B/ReDeEP(chunk).json"
+    # elif args.model_name == "llama2-13b":
+    #     save_path = "./ReDeEP/log/test_llama2_13B/ReDeEP(chunk).json"
+    # elif args.model_name == "llama3-8b":
+    #     save_path = "./ReDeEP/log/test_llama3_8B/ReDeEP(chunk).json"
+    # else:
+    #     print("model name error")
+    #     exit(-1)
+    # result_dict = {"auc":auc_difference_normalized, "pcc": person_difference_normalized}
+    # print(result_dict)
+    # with open(save_path, 'w') as f:
+    #     json.dump(result_dict, f, ensure_ascii=False)
         
 
 

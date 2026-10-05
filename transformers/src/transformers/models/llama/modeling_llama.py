@@ -1339,6 +1339,7 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
                         logits = self.lm_head(self.model.norm(outputs.hidden_states[knowledge_layer+1]))
                     residual_logits = self.lm_head(self.model.norm(outputs.residuals[knowledge_layer]))
                 logits_dict[knowledge_layer] = (logits, residual_logits)
+            
             # consistent with original code    
             hidden_states = outputs[0]
             if self.config.pretraining_tp > 1:

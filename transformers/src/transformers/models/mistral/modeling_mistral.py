@@ -689,6 +689,7 @@ class MistralDecoderLayer(nn.Module):
         output_attentions: Optional[bool] = False,
         use_cache: Optional[bool] = False,
         cache_position: Optional[torch.LongTensor] = None,
+        output_residual: Optional[bool] = False,
     ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:
         """
         Args:
@@ -734,6 +735,9 @@ class MistralDecoderLayer(nn.Module):
 
         if use_cache:
             outputs += (present_key_value,)
+
+        if output_residual:
+            outputs += (residual,)
 
         return outputs
 
@@ -899,6 +903,7 @@ class MistralModel(MistralPreTrainedModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
+        output_residual: Optional[bool] = False,
     ) -> Union[Tuple, BaseModelOutputWithPast]:
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
@@ -946,6 +951,7 @@ class MistralModel(MistralPreTrainedModel):
         # decoder layers
         all_hidden_states = () if output_hidden_states else None
         all_self_attns = () if output_attentions else None
+        all_residuals = () if output_residual else None
         next_decoder_cache = None
 
         for decoder_layer in self.layers:
@@ -962,6 +968,7 @@ class MistralModel(MistralPreTrainedModel):
                     output_attentions,
                     use_cache,
                     cache_position,
+                    output_residual,
                 )
             else:
                 layer_outputs = decoder_layer(
@@ -972,6 +979,7 @@ class MistralModel(MistralPreTrainedModel):
                     output_attentions=output_attentions,
                     use_cache=use_cache,
                     cache_position=cache_position,
+                    output_residual=output_residual,
                 )
 
             hidden_states = layer_outputs[0]
@@ -981,6 +989,9 @@ class MistralModel(MistralPreTrainedModel):
 
             if output_attentions:
                 all_self_attns += (layer_outputs[1],)
+
+            if output_residual:
+                all_residuals += (layer_outputs[-1],)
 
         hidden_states = self.norm(hidden_states)
 
@@ -999,6 +1010,7 @@ class MistralModel(MistralPreTrainedModel):
             past_key_values=next_cache,
             hidden_states=all_hidden_states,
             attentions=all_self_attns,
+            residuals=all_residuals
         )
 
     def _update_causal_mask(
@@ -1152,6 +1164,7 @@ class MistralForCausalLM(MistralPreTrainedModel):
         use_cache: Optional[bool] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
+        knowledge_layers: Optional[List[int]] = None,
         return_dict: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
     ) -> Union[Tuple, CausalLMOutputWithPast]:
@@ -1187,6 +1200,7 @@ class MistralForCausalLM(MistralPreTrainedModel):
         )
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
+        output_residual = True if knowledge_layers is not None or self.select_layers is not None else False
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         outputs = self.model(
             input_ids=input_ids,
@@ -1199,36 +1213,90 @@ class MistralForCausalLM(MistralPreTrainedModel):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
             cache_position=cache_position,
+            output_residual=output_residual,
         )
 
-        hidden_states = outputs[0]
-        logits = self.lm_head(hidden_states)
-        logits = logits.float()
+        if knowledge_layers is not None:
+            logits_dict = {}
 
-        loss = None
-        if labels is not None:
-            # Shift so that tokens < n predict n
-            shift_logits = logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
-            # Flatten the tokens
-            shift_logits = shift_logits.view(-1, self.config.vocab_size)
-            shift_labels = shift_labels.view(-1)
-            # Ensure tensors are on the same device
-            shift_labels = shift_labels.to(shift_logits.device)
-            loss_fct = CrossEntropyLoss()
-            loss = loss_fct(shift_logits, shift_labels)
+            for i, knowledge_layer in enumerate(knowledge_layers):
+                if self.config.pretraining_tp > 1:
+                    lm_head_slices = self.lm_head.weight.split(self.vocab_size // self.config.pretraining_tp, dim=0)
+                    if i == self.model.config.num_hidden_layers-1:
+                        logits = [F.linear(outputs.hidden_states[knowledge_layer+1], lm_head_slices[i]) for i in range(self.config.pretraining_tp)]
+                    else:
+                        logits = [F.linear(self.model.norm(outputs.hidden_states[knowledge_layer+1]), lm_head_slices[i]) for i in range(self.config.pretraining_tp)] 
 
-        if not return_dict:
-            output = (logits,) + outputs[1:]
-            return (loss,) + output if loss is not None else output
+                    logits = torch.cat(logits, dim=-1)
+                    residual_logits = [F.linear(self.model.norm(outputs.residuals[knowledge_layer]), lm_head_slices[i]) for i in range(self.config.pretraining_tp)] 
+                    residual_logits = torch.cat(residual_logits, dim=-1)
+                else:
+                    if i == self.model.config.num_hidden_layers-1:
+                        logits = self.lm_head(outputs.hidden_states[knowledge_layer+1])
+                    else:
+                        logits = self.lm_head(self.model.norm(outputs.hidden_states[knowledge_layer+1]))
+                    residual_logits = self.lm_head(self.model.norm(outputs.residuals[knowledge_layer]))
+                logits_dict[knowledge_layer] = (logits, residual_logits)
+            
+            # consistent with original code    
+            hidden_states = outputs[0]
+            if self.config.pretraining_tp > 1:
+                lm_head_slices = self.lm_head.weight.split(self.vocab_size // self.config.pretraining_tp, dim=0)
+                logits = [F.linear(hidden_states, lm_head_slices[i]) for i in range(self.config.pretraining_tp)]
+                logits = torch.cat(logits, dim=-1)
+            else:
+                logits = self.lm_head(hidden_states)
+            logits = logits.float()
 
-        return CausalLMOutputWithPast(
-            loss=loss,
-            logits=logits,
-            past_key_values=outputs.past_key_values,
-            hidden_states=outputs.hidden_states,
-            attentions=outputs.attentions,
-        )
+            loss = None
+            if labels is not None:
+                # Shift so that tokens < n predict n
+                shift_logits = logits[..., :-1, :].contiguous()
+                shift_labels = labels[..., 1:].contiguous()
+                # Flatten the tokens
+                loss_fct = CrossEntropyLoss()
+                shift_logits = shift_logits.view(-1, self.config.vocab_size)
+                shift_labels = shift_labels.view(-1)
+                # Enable model parallelism
+                shift_labels = shift_labels.to(shift_logits.device)
+                loss = loss_fct(shift_logits, shift_labels)
+            final_outputs = CausalLMOutputWithPast(
+                loss=loss,
+                logits=logits,
+                past_key_values=outputs.past_key_values,
+                hidden_states=outputs.hidden_states,
+                attentions=outputs.attentions,
+            )
+            return logits_dict, final_outputs
+        else:
+            hidden_states = outputs[0]
+            logits = self.lm_head(hidden_states)
+            logits = logits.float()
+
+            loss = None
+            if labels is not None:
+                # Shift so that tokens < n predict n
+                shift_logits = logits[..., :-1, :].contiguous()
+                shift_labels = labels[..., 1:].contiguous()
+                # Flatten the tokens
+                shift_logits = shift_logits.view(-1, self.config.vocab_size)
+                shift_labels = shift_labels.view(-1)
+                # Ensure tensors are on the same device
+                shift_labels = shift_labels.to(shift_logits.device)
+                loss_fct = CrossEntropyLoss()
+                loss = loss_fct(shift_logits, shift_labels)
+
+            if not return_dict:
+                output = (logits,) + outputs[1:]
+                return (loss,) + output if loss is not None else output
+
+            return CausalLMOutputWithPast(
+                loss=loss,
+                logits=logits,
+                past_key_values=outputs.past_key_values,
+                hidden_states=outputs.hidden_states,
+                attentions=outputs.attentions,
+            )
 
     def prepare_inputs_for_generation(
         self,
